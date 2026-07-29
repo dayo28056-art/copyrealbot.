@@ -1,243 +1,283 @@
 import os
+
 import re
+
 import logging
+
 import sys
+
+import asyncio
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
+
 from http import HTTPStatus
 
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    InputFile,
-)
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-    filters,
-)
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+
+
+
+# Deep console logging routing
 
 logging.basicConfig(
-    format="%(asctime)s | %(levelname)s | %(message)s",
+
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", 
+
     level=logging.INFO,
-    handlers=[logging.StreamHandler(sys.stdout)],
+
+    handlers=[logging.StreamHandler(sys.stdout)]
+
 )
 
 logger = logging.getLogger(__name__)
 
+
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-PUBLIC_URL = os.getenv("RAILWAY_PUBLIC_URL")
+
+RAILWAY_PUBLIC_URL = os.getenv("RAILWAY_PUBLIC_URL")
+
+
 
 if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN is missing.")
 
-WELCOME_TEXT = """
-👋 *Welcome to CopyBot*
+    logger.error("CRITICAL CONFIG ERROR: BOT_TOKEN variable is missing!")
 
-Send any text and I'll help you with professional copy tools.
+    sys.exit(1)
 
-✨ Clean Formatting
-🔗 Remove Tracking Links
-📊 Count Characters & Words
 
-Choose a tool after sending your text.
-"""
 
-bot = Application.builder().token(BOT_TOKEN).build()
+# Initialize application structure
+
+ptb = Application.builder().token(BOT_TOKEN).build()
+
 
 
 @asynccontextmanager
+
 async def lifespan(app: FastAPI):
 
-    await bot.initialize()
+    """Manages bot execution lifecycle safely across Webhook or Polling methods."""
 
-    if PUBLIC_URL:
+    await ptb.initialize()
 
-        webhook = f"{PUBLIC_URL.rstrip('/')}/webhook"
+    
 
-        await bot.bot.set_webhook(
-            url=webhook,
-            drop_pending_updates=True,
-        )
+    if RAILWAY_PUBLIC_URL:
 
-        await bot.start()
+        # Configuration setup for Webhook routing
+
+        clean_url = RAILWAY_PUBLIC_URL if RAILWAY_PUBLIC_URL.startswith("http") else f"https://{RAILWAY_PUBLIC_URL}"
+
+        webhook_target = f"{clean_url.rstrip('/')}/webhook"
+
+        logger.info(f"Registering Webhook route link: {webhook_target}")
+
+        await ptb.bot.set_webhook(url=webhook_target, drop_pending_updates=True)
+
+        await ptb.start()
 
     else:
 
-        await bot.bot.delete_webhook(
-            drop_pending_updates=True
-        )
+        # Safe structural fallback mechanism if domain isn't generated yet
 
-        await bot.start()
+        logger.warning("No public domain detected. Activating Fallback Polling loop mode...")
 
-        await bot.updater.start_polling()
+        await ptb.bot.delete_webhook(drop_pending_updates=True)
+
+        await ptb.start()
+
+        # Run polling loop inside the background execution pool safely
+
+        asyncio.create_task(ptb.updater.start_polling(drop_pending_updates=True))
+
+        logger.info("Fallback Polling engine loop is online and listening!")
+
+        
 
     yield
 
-    if bot.updater and bot.updater.running:
-        await bot.updater.stop()
+    
 
-    await bot.stop()
-    await bot.shutdown()
+    # Secure cleanup handling when container closes down
+
+    if ptb.updater and ptb.updater.is_active:
+
+        await ptb.updater.stop()
+
+    await ptb.stop()
+
+    await ptb.shutdown()
+
 
 
 app = FastAPI(lifespan=lifespan)
 
 
-@app.get("/")
-async def root():
-    return {
-        "status": "running"
-    }
-
 
 @app.post("/webhook")
-async def webhook(request: Request):
 
-    update = Update.de_json(
-        await request.json(),
-        bot.bot,
-    )
+async def handle_telegram_updates(request: Request):
 
-    await bot.process_update(update)
+    """Webhook data entry port."""
+
+    try:
+
+        payload = await request.json()
+
+        update = Update.de_json(payload, ptb.bot)
+
+        await ptb.process_update(update)
+
+    except Exception as e:
+
+        logger.error(f"Webhook update processing exception error: {e}")
 
     return Response(status_code=HTTPStatus.OK)
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    image = "images/welcome.jpg"
+@app.get("/")
 
-    if os.path.exists(image):
+async def homepage_health_check():
 
-        with open(image, "rb") as photo:
-
-            await update.message.reply_photo(
-                photo=InputFile(photo),
-                caption=WELCOME_TEXT,
-                parse_mode="Markdown",
-            )
-
-    else:
-
-        await update.message.reply_text(
-            WELCOME_TEXT,
-            parse_mode="Markdown",
-        )
+    return {"status": "CopyBot application background core is fully functional!"}
 
 
-async def receive_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    context.user_data["text"] = update.message.text
+# --- INTERACTION CODE INTERFACE ---
 
-    keyboard = [
 
-        [
-            InlineKeyboardButton(
-                "🧹 Clean Formatting",
-                callback_data="clean",
-            )
-        ],
 
-        [
-            InlineKeyboardButton(
-                "🔗 Remove Tracking Links",
-                callback_data="links",
-            )
-        ],
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("User started the bot.")
 
-        [
-            InlineKeyboardButton(
-                "📊 Copy Statistics",
-                callback_data="stats",
-            )
-        ],
+    welcome_text = """
+✅ VIP has increased to 3.5% + 3📌
 
-    ]
+🪙 **REGISTER HERE ⏩⏩**
+https://app-web.mobiuspe-app.com/regist?code=earnmoney426
+
+✅ We offer team leader salaries and up to **0.6% team commission**.
+Please contact us to apply for a team leader position.
+
+🛒 **Official Channel**
+https://t.me/mobiuspayofficial1
+
+⭐️ **Contact Support**
+@puya1521
+"""
 
     await update.message.reply_text(
-        "Choose an option:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        welcome_text,
+        parse_mode="Markdown"
     )
 
 
-async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def text_processor(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    raw_user_text = update.message.text
+
+    context.user_data["current_text"] = raw_user_text
+
+
+
+    keyboard = [
+
+        [InlineKeyboardButton("🧹 Pure Clean (Fix Space & Formatting)", callback_data="clean")],
+
+        [InlineKeyboardButton("🔗 Strip URL Tracking Tags", callback_data="strip_links")],
+
+        [InlineKeyboardButton("📊 Count Ad Characters & Words", callback_data="metrics")]
+
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text("Choose a professional tool option below:", reply_markup=reply_markup)
+
+
+
+async def button_dispatcher(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
 
     await query.answer()
 
-    text = context.user_data.get("text")
+    
 
-    if not text:
+    user_text = context.user_data.get("current_text", "")
 
-        await query.edit_message_text(
-            "Please send some text first."
-        )
+    if not user_text:
+
+        await query.edit_message_text("❌ No text sequence found. Please send your text over again.")
 
         return
 
+
+
     if query.data == "clean":
 
-        cleaned = re.sub(
-            r"\n\s*\n",
-            "\n\n",
-            text.strip(),
+        cleaned = re.sub(r'\n\s*\n', '\n\n', user_text).strip()
+
+        cleaned = re.sub(r'[ \t]+', ' ', cleaned)
+
+        output = f"✨ **Your Cleaned Copy:**\n\n```\n{cleaned}\n```"
+
+        await query.edit_message_text(output, parse_mode="Markdown")
+
+
+
+    elif query.data == "strip_links":
+
+        stripped = re.sub(r'(\?|\&)(utm_[a-z]+|fbclid|gclid|affiliate|ref)=[^&\s]+', '', user_text)
+
+        output = f"🔗 **Cleaned Links (Trackers Removed):**\n\n{stripped}"
+
+        await query.edit_message_text(output)
+
+
+
+    elif query.data == "metrics":
+
+        char_count = len(user_text)
+
+        word_count = len(user_text.split())
+
+        paragraph_count = len([p for p in user_text.split('\n') if p.strip()])
+
+        
+
+        metrics_dashboard = (
+
+            "📊 **Copy Audit Dashboard**\n"
+
+            "---\n"
+
+            f"• **Total Characters:** {char_count}\n"
+
+            f"• **Total Words:** {word_count}\n"
+
+            f"• **Paragraph Blocks:** {paragraph_count}\n"
+
+            "---\n"
+
+            "💡 *Tip: High-converting social captions typically track best under 150 words!*"
+
         )
 
-        cleaned = re.sub(
-            r"[ \t]+",
-            " ",
-            cleaned,
-        )
-
-        await query.edit_message_text(
-            f"✨ Cleaned Text\n\n{cleaned}"
-        )
-
-    elif query.data == "links":
-
-        cleaned = re.sub(
-            r"([?&])(utm_[^=&]+|fbclid|gclid)=[^&]+",
-            "",
-            text,
-        )
-
-        await query.edit_message_text(cleaned)
-
-    elif query.data == "stats":
-
-        chars = len(text)
-        words = len(text.split())
-        lines = len(text.splitlines())
-
-        await query.edit_message_text(
-            f"""📊 Copy Statistics
-
-Characters: {chars}
-
-Words: {words}
-
-Lines: {lines}
-"""
-        )
+        await query.edit_message_text(metrics_dashboard, parse_mode="Markdown")
 
 
-bot.add_handler(CommandHandler("start", start))
 
-bot.add_handler(
-    MessageHandler(
-        filters.TEXT & ~filters.COMMAND,
-        receive_text,
-    )
-)
+# Add handlers
 
-bot.add_handler(
-    CallbackQueryHandler(buttons)
-)
+ptb.add_handler(CommandHandler("start", start_command))
+
+ptb.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_processor))
+
+ptb.add_handler(CallbackQueryHandler(button_dispatcher))
