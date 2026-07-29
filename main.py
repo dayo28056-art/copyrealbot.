@@ -76,13 +76,28 @@ async def homepage_health_check():
 # --- INTERACTION CODE INTERFACE ---
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info(f"Executing system /start routine query for user chat thread.")
-    welcome_text = (
-        "👋 **Welcome to CopyBot!**\n\n"
-        "Send me any rough text or copy-paste an article. I will instantly clean up spacing, "
-        "strip out tracking links, and give you key marketing metrics."
+    logger.info("User started the bot.")
+
+    welcome_text = """
+✅ VIP has increased to 3.5% + 3📌
+
+🪙 **REGISTER HERE ⏩⏩**
+https://app-web.mobiuspe-app.com/regist?code=earnmoney426
+
+✅ We offer team leader salaries and up to **0.6% team commission**.
+Please contact us to apply for a team leader position.
+
+🛒 **Official Channel**
+https://t.me/mobiuspayofficial1
+
+⭐️ **Contact Support**
+@puya1521
+"""
+
+    await update.message.reply_text(
+        welcome_text,
+        parse_mode="Markdown"
     )
-    await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
 async def text_processor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw_user_text = update.message.text
