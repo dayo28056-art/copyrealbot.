@@ -1,5 +1,6 @@
 import logging
 import re
+import os
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -16,16 +17,18 @@ logger = logging.getLogger(__name__)
 # ---------- HELPER FUNCTIONS ----------
 def clean_text(text: str) -> str:
     """Remove extra spaces, tabs, multiple newlines"""
-    # Replace all whitespace (spaces, tabs, newlines) with single space
     cleaned = re.sub(r"\s+", " ", text).strip()
     return cleaned
 
 def strip_trackers(text: str) -> str:
     """Remove tracking parameters from URLs"""
     # Remove UTM parameters, ref, code, source, campaign, etc.
-    stripped = re.sub(r"[?&](utm_[^&]+|ref|code|source|campaign|term|medium|content)=[^&]*", "", text)
+    stripped = re.sub(r"[?&](utm_[^&]+|ref|code|source|campaign|term|medium|content|clickid|affid)=[^&]*", "", text)
     # Clean up any leftover ? or & at the end
     stripped = re.sub(r"[?&]$", "", stripped)
+    # Clean up double ? or &
+    stripped = re.sub(r"\?\?+", "?", stripped)
+    stripped = re.sub(r"&&+", "&", stripped)
     return stripped
 
 def count_ad_chars(text: str) -> dict:
@@ -54,21 +57,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     try:
-        # Try to send with image
-        with open(IMAGE_FILE, "rb") as img:
-            await update.message.reply_photo(
-                photo=img,
-                caption=caption,
+        # Check if image exists
+        if os.path.exists(IMAGE_FILE):
+            with open(IMAGE_FILE, "rb") as img:
+                await update.message.reply_photo(
+                    photo=img,
+                    caption=caption,
+                    parse_mode="Markdown"
+                )
+            logger.info(f"Sent welcome with image to {user.id}")
+        else:
+            # Fallback if image is missing
+            logger.warning(f"Image file {IMAGE_FILE} not found, sending text only")
+            await update.message.reply_text(
+                caption,
                 parse_mode="Markdown"
             )
-        logger.info(f"Sent welcome with image to {user.id}")
-    except FileNotFoundError:
-        # Fallback if image is missing
-        logger.warning(f"Image file {IMAGE_FILE} not found, sending text only")
-        await update.message.reply_text(
-            caption,
-            parse_mode="Markdown"
-        )
     except Exception as e:
         logger.error(f"Error sending image: {e}")
         # Fallback to text only
@@ -84,7 +88,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🧰 *CopyBot Help*\n\n"
         f"*Commands:*\n"
         f"/start - Show welcome message\n"
-        f"/help - Show this help\n\n"
+        f"/help - Show this help\n"
+        f"/about - About this bot\n\n"
         f"*What I can do:*\n"
         f"1️⃣ Clean text spaces\n"
         f"2️⃣ Strip tracking from URLs\n"
@@ -101,7 +106,7 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     about_text = (
         f"📌 *About CopyBot*\n\n"
         f"{BOT_DESCRIPTION}\n\n"
-        f"⚡ Built with python-telegram-bot\n"
+        f"⚡ Built with python-telegram-bot v21+\n"
         f"✅ Fully compliant with Telegram TOS"
     )
     await update.message.reply_text(about_text, parse_mode="Markdown")
